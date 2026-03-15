@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>微信风格聊天页面（完整功能版）</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* 新增语音气泡播放动画 */
+        @keyframes voiceWave {
+            0% { transform: scale(0.9); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(0.9); opacity: 0.8; }
+        }
+        .voice-bubble {
+            display: flex;
+            align-items: center;
+            padding: 8px 16px;
+            cursor: pointer;
+            position: relative;
+        }
+        .voice-bubble.playing .voice-icon {
+            animation: voiceWave 1s infinite;
+        }
+        .voice-icon {
+            margin-right: 8px;
+            font-size: 18px;
+            color: inherit;
+        }
+        .voice-duration {
+            font-size: 14px;
+        }
+        .message-time {
+            font-size: 10px;
+            color: #999;
+            margin: 0 8px;
+            align-self: flex-end;
+        }
+        .chat-item {
+            display: flex;
+            margin: 6px 0;
+            padding: 0 8px;
+            align-items: flex-end;
+        }
+        /* 基础样式 */
+        body {
+            touch-action: manipulation;
+        }
+        /* 聊天项容器 */
+        .chat-item {
+            display: flex;
+            margin: 6px 0;
+            padding: 0 8px;
+            align-items: flex-end; /* 确保头像和气泡底部对齐 */
+        }
+        .user-chat {
+            justify-content: flex-end;
+        }
+        .ai-chat {
+            justify-content: flex-start;
+        }
+        /* 头像样式 */
+        .chat-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            margin: 0 8px;
+            background-size: cover;
+            background-position: center;
+        }
+        .user-avatar {
+            background-image: url('/icon/001.jpg'); /* 用户头像 */
+        }
+        .ai-avatar {
+            background-image: url('/icon/img.png'); /* AI头像 */
+        }
+        /* 聊天气泡 */
+        .chat-bubble {
+            max-width: 75%;
+            padding: 8px 12px;
+            border-radius: 18px;
+            line-height: 1.5;
+            word-wrap: break-word;
+            word-break: break-all;
+            position: relative;
+        }
+        .user-bubble {
+            background-color: #00C853;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        .ai-bubble {
+            background-color: #E5E5EA;
+            color: #000;
+            border-bottom-left-radius: 4px;
+        }
+        /* 转账消息样式 */
+        .transfer-bubble {
+            background-color: #FFF8E6;
+            border-radius: 8px;
+            padding: 10px;
+            max-width: 80%;
+            font-size: 14px;
+        }
+        .transfer-amount {
+            color: #FF5722;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .transfer-status {
+            color: #666;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+        /* 表情包面板 */
+        .emoji-panel {
+            height: 200px;
+            background-color: #f7f7f7;
+            border-top: 1px solid #e0e0e0;
+            padding: 10px;
+            overflow-y: auto;
+            display: none;
+        }
+        .emoji-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 10px;
+        }
+        .emoji-item {
+            font-size: 24px;
+            text-align: center;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 8px;
+            transition: background-color 0.2s;
+        }
+        .emoji-item:hover {
+            background-color: #e0e0e0;
+        }
+        /* 底部功能区（微信原生布局） */
+        .bottom-bar {
+            display: flex;
+            align-items: center;
+            padding: 6px 10px;
+            background-color: #f2f2f2;
+            border-top: 1px solid #e0e0e0;
+        }
+        /* 左侧：语音/键盘切换按钮 */
+        .voice-keyboard-btn {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+            font-size: 20px;
+            cursor: pointer;
+        }
+        /* 中间：输入框/语音操作按钮（切换显示） */
+        .input-voice-wrapper {
+            flex: 1;
+            margin: 0 8px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .chat-input {
+            width: 100%;
+            padding: 8px 16px;
+            border: 1px solid #d0d0d0;
+            border-radius: 20px;
+            background-color: white;
+            outline: none;
+            font-size: 14px;
+        }
+        /* 语音操作按钮组（替代原按住说话） */
+        .voice-actions {
+            display: none;
+            width: 100%;
+            display: flex;
+            gap: 10px;
+        }
+        .voice-action-btn {
+            flex: 1;
+            padding: 10px 0;
+            border: none;
+            border-radius: 20px;
+            font-size: 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .start-record-btn {
+            background-color: #00C853;
+            color: white;
+        }
+        .start-record-btn:hover {
+            background-color: #00b44b;
+        }
+        .cancel-record-btn {
+            background-color: #ff4d4f;
+            color: white;
+        }
+        .cancel-record-btn:hover {
+            background-color: #ff3336;
+        }
+        .stop-record-btn {
+            background-color: #1890ff;
+            color: white;
+            display: none;
+        }
+        .stop-record-btn:hover {
+            background-color: #096dd9;
+        }
+        /* 右侧：表情包+加号按钮 */
+        .right-tools {
+            display: flex;
+            align-items: center;
+        }
+        .tool-btn {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+            font-size: 20px;
+            cursor: pointer;
+        }
+        /* 加号功能面板（底部弹出） */
+        .plus-panel {
+            position: fixed;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 350px;
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            padding: 15px;
+            z-index: 999;
+            display: none;
+        }
+        .plus-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .plus-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background-color: #f7f7f7;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            margin-bottom: 5px;
+        }
+        .plus-label {
+            font-size: 12px;
+            color: #333;
+        }
+        /* 语音录制弹窗（优化样式） */
+        .voice-recording-popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.85);
+            color: white;
+            border-radius: 20px;
+            padding: 30px 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 9999;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            display: none;
+        }
+        .wave-icon {
+            font-size: 50px;
+            margin-bottom: 15px;
+            color: #00C853;
+            animation: voiceWave 1.2s infinite;
+        }
+        .recording-text {
+            font-size: 18px;
+            margin-bottom: 5px;
+        }
+        .recording-time {
+            font-size: 14px;
+            color: #ccc;
+        }
+        /* 滚动条美化 */
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: #ccc;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+<!-- 主容器 -->
+<div class="w-full max-w-md h-screen mx-auto bg-white flex flex-col shadow-md overflow-hidden">
+    <!-- 顶部导航栏 -->
+    <div class="bg-gray-800 text-white p-3 flex items-center justify-between">
+        <div class="flex items-center">
+            <i class="fa-solid fa-chevron-left mr-3 cursor-pointer"></i>
+            <span class="font-medium">爱莉希雅</span>
+        </div>
+        <div class="flex items-center space-x-4">
+            <i class="fa-solid fa-search cursor-pointer"></i>
+            <i class="fa-solid fa-ellipsis-v cursor-pointer"></i>
+        </div>
+    </div>
+
+    <!-- 聊天内容区 -->
+    <div id="chatContainer" class="flex-1 overflow-y-auto bg-gray-50">
+        <div class="chat-item ai-chat">
+            <div class="chat-avatar ai-avatar"></div>
+            <div class="chat-bubble ai-bubble">你好！有什么可以帮到你？</div>
+        </div>
+    </div>
+
+    <!-- 表情包面板 -->
+    <div id="emojiPanel" class="emoji-panel">
+        <div class="emoji-grid" id="emojiGrid"></div>
+    </div>
+
+    <!-- 底部功能区 -->
+    <div class="bottom-bar">
+        <!-- 左侧：语音/键盘切换按钮 -->
+        <div class="voice-keyboard-btn" id="voiceKeyboardBtn">
+            <i class="fa-solid fa-microphone" id="voiceIcon"></i>
+            <i class="fa-solid fa-keyboard hidden" id="keyboardIcon"></i>
+        </div>
+
+        <!-- 中间：输入框/语音操作按钮 -->
+        <div class="input-voice-wrapper">
+            <!-- 文本输入框 -->
+            <input type="text" id="promptInput" class="chat-input" placeholder="请输入消息...">
+
+            <!-- 语音操作按钮组（默认隐藏） -->
+            <div class="voice-actions" id="voiceActions">
+                <button class="voice-action-btn start-record-btn" id="startRecordBtn">
+                    <i class="fa-solid fa-microphone mr-2"></i>开始录音
+                </button>
+                <button class="voice-action-btn cancel-record-btn" id="cancelRecordBtn" style="display: none;">
+                    <i class="fa-solid fa-times mr-2"></i>取消
+                </button>
+                <button class="voice-action-btn stop-record-btn" id="stopRecordBtn">
+                    <i class="fa-solid fa-paper-plane mr-2"></i>发送语音
+                </button>
+            </div>
+        </div>
+
+        <!-- 右侧：表情包+加号 -->
+        <div class="right-tools">
+            <div class="tool-btn" id="emojiBtn">
+                <i class="fa-solid fa-smile"></i>
+            </div>
+            <div class="tool-btn" id="plusBtn">
+                <i class="fa-solid fa-plus"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- 语音录制弹窗 -->
+    <div class="voice-recording-popup" id="voiceRecordingPopup">
+        <div class="wave-icon"><i class="fa-solid fa-wave-square"></i></div>
+        <div class="recording-text">正在录音</div>
+        <div class="recording-time" id="recordingTime">00:00</div>
+    </div>
+
+    <!-- 加号功能面板 -->
+    <div id="plusPanel" class="plus-panel">
+        <div class="plus-item" data-type="album">
+            <div class="plus-icon"><i class="fa-solid fa-images"></i></div>
+            <div class="plus-label">相册</div>
+        </div>
+        <div class="plus-item" data-type="camera">
+            <div class="plus-icon"><i class="fa-solid fa-camera"></i></div>
+            <div class="plus-label">拍摄</div>
+        </div>
+        <div class="plus-item" data-type="video-call">
+            <div class="plus-icon"><i class="fa-solid fa-video"></i></div>
+            <div class="plus-label">视频通话</div>
+        </div>
+        <div class="plus-item" data-type="location">
+            <div class="plus-icon"><i class="fa-solid fa-location-dot"></i></div>
+            <div class="plus-label">位置</div>
+        </div>
+        <div class="plus-item" data-type="red-packet">
+            <div class="plus-icon"><i class="fa-solid fa-envelope"></i></div>
+            <div class="plus-label">红包</div>
+        </div>
+        <div class="plus-item" data-type="gift">
+            <div class="plus-icon"><i class="fa-solid fa-gift"></i></div>
+            <div class="plus-label">礼物</div>
+        </div>
+        <div class="plus-item" data-type="transfer">
+            <div class="plus-icon"><i class="fa-solid fa-money-bill-transfer"></i></div>
+            <div class="plus-label">转账</div>
+        </div>
+        <div class="plus-item" data-type="voice-input">
+            <div class="plus-icon"><i class="fa-solid fa-microphone"></i></div>
+            <div class="plus-label">语音输入</div>
+        </div>
+    </div>
+</div>
+<script>
+    // 全局变量
+    const conversationId = 'conv_' + Date.now();
+    const chatContainer = document.getElementById('chatContainer');
+    const promptInput = document.getElementById('promptInput');
+    const emojiBtn = document.getElementById('emojiBtn');
+    const emojiPanel = document.getElementById('emojiPanel');
+    const emojiGrid = document.getElementById('emojiGrid');
+    const plusBtn = document.getElementById('plusBtn');
+    const plusPanel = document.getElementById('plusPanel');
+    const voiceKeyboardBtn = document.getElementById('voiceKeyboardBtn');
+    const voiceIcon = document.getElementById('voiceIcon');
+    const keyboardIcon = document.getElementById('keyboardIcon');
+    const voiceActions = document.getElementById('voiceActions');
+    const startRecordBtn = document.getElementById('startRecordBtn');
+    const cancelRecordBtn = document.getElementById('cancelRecordBtn');
+    const stopRecordBtn = document.getElementById('stopRecordBtn');
+    const voiceRecordingPopup = document.getElementById('voiceRecordingPopup');
+    const recordingTime = document.getElementById('recordingTime');
+
+    // 语音相关变量
+    let mediaRecorder;
+    let audioChunks = [];
+    let recordingSeconds = 0;
+    let isRecording = false;
+    let recordingTimer = null;
+    let isVoiceMode = false; // 是否处于语音模式
+    let mediaStream = null; // 媒体流对象
+
+    // ========== 新增：WebSocket相关全局变量 ==========
+    let ws = null;
+    const userId = 1; // 随机生成用户ID（可替换为实际登录ID）
+    const wsUrl = `ws://${window.location.host}/ws/chat/1`; // WebSocket连接地址
+
+    // 常用表情包
+    const emojis = [
+        '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣',
+        '😊', '😇', '🙂', '🤗', '🤩', '🤔', '🤨', '😐',
+        '😑', '😶', '🙄', '😏', '😣', '😥', '😮', '🤐',
+        '😯', '😪', '😫', '🥱', '😴', '😌', '😛', '😜',
+        '😝', '🤤', '😒', '😓', '😔', '😕', '🙃', '🤑',
+        '😲', '☹️', '🙁', '😖', '😞', '😟', '😤', '😢',
+        '😭', '😦', '😧', '😨', '😩', '🤯', '😬', '😰',
+        '😱', '🥵', '🥶', '😳', '🤪', '😵', '😡', '😠'
+    ];
+
+    // ========== 新增：初始化WebSocket连接 ==========
+    const initWebSocket = () => {
+        // 关闭已有连接
+        if (ws) {
+            ws.close();
+        }
+
+        // 创建新连接
+        ws = new WebSocket(wsUrl);
+
+        // 连接成功
+        ws.onopen = () => {
+            console.log('WebSocket连接成功');
+            // 发送连接成功消息（可选）
+            ws.send(JSON.stringify({
+                type: 'connect',
+                userId: userId,
+                conversationId: conversationId
+            }));
+        };
+
+        // 接收后端消息（核心：处理文字/语音推送）
+        ws.onmessage = (event) => {
+            try {
+                const message = JSON.parse(event.data);
+                // 判断消息类型
+                if (message.filetype === 0) {
+                    // 文字消息：渲染文字气泡S
+                    addMessage(message.text, 'ai');
+                } else if (message.filetype === 1) {
+                    // 语音消息：渲染语音气泡（使用返回的voiceUrl）
+                    addVoiceMessage(0, 'ai', message.text);
+                }
+                // else if (message.type === 'system') {
+                //     // 系统消息：渲染文字气泡（灰色）
+                //     addMessage(message.content, 'ai');
+                // }
+            } catch (e) {
+                console.error('解析WebSocket消息失败:', e);
+            }
+        };
+
+        // 连接关闭：自动重连
+        ws.onclose = () => {
+            console.log('WebSocket连接关闭，3秒后重连...');
+            setTimeout(initWebSocket, 3000);
+        };
+
+        // 连接错误
+        ws.onerror = (error) => {
+            console.error('WebSocket连接错误:', error);
+        };
+    };
+
+    // 初始化表情包
+    function initEmojis() {
+        emojis.forEach(emoji => {
+            const emojiItem = document.createElement('div');
+            emojiItem.className = 'emoji-item';
+            emojiItem.textContent = emoji;
+            emojiItem.addEventListener('click', () => {
+                promptInput.value += emoji;
+                promptInput.focus();
+            });
+            emojiGrid.appendChild(emojiItem);
+        });
+    }
+
+    // 发送文本消息（修改：通过WebSocket发送）
+    const sendTextMessage = async () => {
+        const content = promptInput.value.trim();
+        if (!content) return;
+        promptInput.value = '';
+
+        // 添加用户消息
+        addMessage(content, 'USER');
+
+        try {
+            const response = await fetch(`/ai/chat?prompt=${encodeURIComponent(content)}`, {
+                method: 'GET',
+                headers: { 'Accept': 'text/html;charset=utf-8' }
+            });
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let aiMessage = '';
+            const aiChatItem = createMessageContainer('ai');
+            const aiBubble = createBubble('ai', '');
+            const aiAvatar = document.createElement('div');
+            aiAvatar.className = 'chat-avatar ai-avatar';
+            aiChatItem.appendChild(aiAvatar);
+            aiChatItem.appendChild(aiBubble);
+            chatContainer.appendChild(aiChatItem);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                aiMessage += decoder.decode(value, { stream: true });
+                aiBubble.textContent = aiMessage;
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+        } catch (error) {
+            addMessage('抱歉，请求失败，请稍后再试', 'ai');
+            console.error('请求错误:', error);
+        }
+    };
+
+    // 加载历史聊天记录
+    const loadChatHistory = async () => {
+        try {
+            const response = await fetch(`/ai/getchat`);
+            const result = await response.json();
+            if (result.data && result.data.length > 0) {
+                chatContainer.innerHTML = '';
+                result.data.forEach(msg => {
+                    if (msg.filetype === 0) {
+                        // 文字消息：渲染文字气泡S
+                        addMessage(msg.text,msg.messageType);
+                    } else if (msg.filetype === 1) {
+                        // 语音消息：渲染语音气泡（使用返回的voiceUrl）
+                        addVoiceMessage(0,msg.messageType, msg.text);
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('加载聊天记录失败:', error);
+        }
+    };
+
+    // 发送转账消息（模拟）
+    const sendTransfer = () => {
+        const chatItem = document.createElement('div');
+        chatItem.className = 'chat-item user-chat';
+        const userAvatar = document.createElement('div');
+        userAvatar.className = 'chat-avatar user-avatar';
+        chatItem.innerHTML = `
+                <div class="transfer-bubble">
+                    <div class="transfer-amount">¥${(Math.random()*100).toFixed(2)}</div>
+                    <div class="transfer-status">已发送</div>
+                    <div class="text-xs text-gray-400 mt-2">微信转账</div>
+                </div>
+            `;
+        chatItem.appendChild(userAvatar);
+        chatContainer.appendChild(chatItem);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    };
+
+    // 初始化语音录制
+    const initVoiceRecording = async () => {
+
+        try {
+            // 提前获取麦克风权限（首次进入页面时）
+            mediaStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: true, // 回声消除
+                    noiseSuppression: true, // 降噪
+                    sampleRate: 16000 // 采样率
+                }
+            });
+            mediaRecorder = new MediaRecorder(mediaStream);
+
+            // 录制数据处理
+            mediaRecorder.ondataavailable = (e) => {
+                audioChunks.push(e.data);
+            };
+
+            // 录制结束（正常停止）
+            mediaRecorder.onstop = async () => {
+                if (!isRecording) { // 只有正常停止才发送
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    audioChunks = [];
+                    await sendVoiceToBackend(audioBlob); // 发送音频到后端
+                } else {
+                    audioChunks = []; // 取消录音时清空
+                }
+                // 关闭媒体流轨道
+                if (mediaStream) {
+                    mediaStream.getTracks().forEach(track => track.stop());
+                }
+            };
+        } catch (err) {
+            console.error("录音权限获取失败:", err);
+            alert("请授予麦克风权限以使用语音功能");
+        }
+    };
+
+    // 格式化录制时间（00:00）
+    const formatRecordingTime = (seconds) => {
+        const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+        const secs = (seconds % 60).toString().padStart(2, '0');
+        return `${mins}:${secs}`;
+    };
+
+    // 开始录音（点击事件）
+    const startRecording = () => {
+        if (isRecording || !mediaRecorder) return;
+
+        // 重置录制状态
+        isRecording = true;
+        recordingSeconds = 0;
+
+        // 更新UI
+        voiceRecordingPopup.style.display = 'flex';
+        recordingTime.textContent = formatRecordingTime(0);
+        startRecordBtn.style.display = 'none';
+        cancelRecordBtn.style.display = 'block';
+        stopRecordBtn.style.display = 'block';
+
+        // 启动计时器
+        recordingTimer = setInterval(() => {
+            recordingSeconds++;
+            recordingTime.textContent = formatRecordingTime(recordingSeconds);
+        }, 1000);
+
+        // 开始录制
+        mediaRecorder.start(100); // 每100ms收集一次数据
+    };
+
+    // 停止录音（点击事件）
+    const stopRecording = () => {
+        if (!isRecording || !mediaRecorder) return;
+
+        // 停止录制
+        isRecording = false;
+        clearInterval(recordingTimer);
+        voiceRecordingPopup.style.display = 'none';
+        mediaRecorder.stop();
+
+        // 恢复UI
+        startRecordBtn.style.display = 'block';
+        cancelRecordBtn.style.display = 'none';
+        stopRecordBtn.style.display = 'none';
+
+        // 添加用户语音气泡
+        addVoiceMessage(recordingSeconds, 'USER');
+    };
+
+    // 取消录音（点击事件）
+    const cancelRecording = () => {
+        if (!isRecording || !mediaRecorder) return;
+
+        // 停止录制（标记为取消）
+        isRecording = false;
+        clearInterval(recordingTimer);
+        voiceRecordingPopup.style.display = 'none';
+        mediaRecorder.stop();
+
+        // 恢复UI
+        startRecordBtn.style.display = 'block';
+        cancelRecordBtn.style.display = 'none';
+        stopRecordBtn.style.display = 'none';
+
+        // 提示取消成功
+        alert('录音已取消');
+    };
+
+    // 发送音频到后端
+    const sendVoiceToBackend = async (audioBlob) => {
+        const formData = new FormData();
+        formData.append('audioFile', audioBlob, `voice_${Date.now()}.wav`);
+        formData.append('conversationId', conversationId);
+
+        try {
+            const response = await fetch('/ai/ttschat', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) throw new Error('请求失败');
+            const aiAudioPath = await response.text();
+            addVoiceMessage(0, 'ai', aiAudioPath);
+        } catch (err) {
+            console.error("语音请求失败:", err);
+            addMessage('语音处理失败，请重试', 'ai');
+        }
+    };
+
+    // 切换语音/文本模式
+    const toggleVoiceMode = () => {
+        isVoiceMode = !isVoiceMode;
+        if (isVoiceMode) {
+            // 切换为语音模式：显示语音操作按钮，隐藏输入框
+            promptInput.style.display = 'none';
+            voiceActions.style.display = 'flex';
+            voiceIcon.classList.add('hidden');
+            keyboardIcon.classList.remove('hidden');
+        } else {
+            // 切换为文本模式：显示输入框，隐藏语音操作按钮
+            promptInput.style.display = 'block';
+            voiceActions.style.display = 'none';
+            voiceIcon.classList.remove('hidden');
+            keyboardIcon.classList.add('hidden');
+
+            // 如果正在录音，自动取消
+            if (isRecording) {
+                cancelRecording();
+            }
+        }
+    };
+
+    // 绑定事件
+    function bindEvents() {
+        // 输入框回车发送
+        promptInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter') sendTextMessage();
+        });
+
+        // 表情包面板切换
+        emojiBtn.addEventListener('click', () => {
+            emojiPanel.style.display = emojiPanel.style.display === 'block' ? 'none' : 'block';
+            plusPanel.style.display = 'none';
+        });
+
+        // 加号面板切换
+        plusBtn.addEventListener('click', () => {
+            plusPanel.style.display = plusPanel.style.display === 'grid' ? 'none' : 'grid';
+            emojiPanel.style.display = 'none';
+        });
+
+        // 加号功能项点击
+        document.querySelectorAll('.plus-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const type = item.dataset.type;
+                plusPanel.style.display = 'none';
+                if (type === 'transfer') sendTransfer();
+                else if (type === 'video-call') alert('发起视频通话');
+            });
+        });
+
+        // 语音/键盘模式切换
+        voiceKeyboardBtn.addEventListener('click', toggleVoiceMode);
+
+        // 语音操作按钮点击事件
+        startRecordBtn.addEventListener('click', startRecording);
+        cancelRecordBtn.addEventListener('click', cancelRecording);
+        stopRecordBtn.addEventListener('click', stopRecording);
+
+        // 点击聊天区关闭面板
+        chatContainer.addEventListener('click', () => {
+            emojiPanel.style.display = 'none';
+            plusPanel.style.display = 'none';
+        });
+    }
+
+    // 创建消息容器
+    const createMessageContainer = (role) => {
+        const chatItem = document.createElement('div');
+        chatItem.className = `chat-item ${role === 'USER' ? 'user-chat' : 'ai-chat'}`;
+        return chatItem;
+    };
+
+    // 创建消息气泡
+    const createBubble = (role, content) => {
+        const bubble = document.createElement('div');
+        bubble.className = `chat-bubble ${role === 'USER' ? 'user-bubble' : 'ai-bubble'}`;
+        bubble.textContent = content;
+        return bubble;
+    };
+
+    // 添加文本消息到聊天区
+    const addMessage = (content, role) => {
+        const chatItem = createMessageContainer(role);
+        const bubble = createBubble(role, content);
+        const avatar = document.createElement('div');
+        avatar.className = `chat-avatar ${role === 'USER' ? 'user-avatar' : 'ai-avatar'}`;
+
+        if (role === 'USER') {
+            chatItem.appendChild(bubble);
+            chatItem.appendChild(avatar);
+        } else {
+            chatItem.appendChild(avatar);
+            chatItem.appendChild(bubble);
+        }
+
+        chatContainer.appendChild(chatItem);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+        return chatItem;
+    };
+
+    // 添加语音消息气泡
+    const addVoiceMessage = (duration, role, audioPath) => {
+        const chatItem = createMessageContainer(role);
+        const bubble = document.createElement('div');
+        bubble.className = `chat-bubble ${role === 'USER' ? 'user-bubble' : 'ai-bubble'} voice-bubble`;
+
+        // 语音气泡内容（优化样式）
+        bubble.innerHTML = `
+            <i class="fa-solid fa-volume-up voice-icon"></i>
+            <span class="voice-duration">${duration > 0 ? formatRecordingTime(duration) : '加载中...'}</span>
+        `;
+
+        // 绑定播放事件
+        if (audioPath) {
+            bubble.dataset.audioPath = audioPath;
+            bubble.addEventListener('click', playAudio);
+        }
+
+        const avatar = document.createElement('div');
+        avatar.className = `chat-avatar ${role === 'USER' ? 'user-avatar' : 'ai-avatar'}`;
+
+        if (role === 'USER') {
+            chatItem.appendChild(bubble);
+            chatItem.appendChild(avatar);
+        } else {
+            chatItem.appendChild(avatar);
+            chatItem.appendChild(bubble);
+        }
+
+        chatContainer.appendChild(chatItem);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+        return chatItem;
+    };
+
+    // 播放音频（优化播放体验）
+    const playAudio = (e) => {
+        const bubble = e.currentTarget;
+        const audioPath = bubble.dataset.audioPath;
+        if (!audioPath) return;
+
+        // 停止其他正在播放的音频
+        document.querySelectorAll('.voice-bubble.playing').forEach(el => {
+            el.classList.remove('playing');
+        });
+
+        // 标记当前播放的气泡
+        bubble.classList.add('playing');
+
+        // 创建音频实例并播放
+        const audio = new Audio("/audio/"+audioPath);
+        audio.play().catch(err => {
+            console.error("播放失败:", err);
+            bubble.classList.remove('playing');
+            alert('音频播放失败，请检查文件路径');
+        });
+
+        // 播放结束移除动画
+        audio.onended = () => {
+            bubble.classList.remove('playing');
+        };
+    };
+
+    // 页面卸载时清理资源
+    window.addEventListener('beforeunload', () => {
+        if (mediaRecorder && isRecording) {
+            mediaRecorder.stop();
+        }
+        if (mediaStream) {
+            mediaStream.getTracks().forEach(track => track.stop());
+        }
+        if (recordingTimer) {
+            clearInterval(recordingTimer);
+        }
+        // ========== 新增：关闭WebSocket连接 ==========
+        if (ws) {
+            ws.close();
+        }
+    });
+
+    // 初始化
+    window.onload = async () => {
+        initEmojis();
+        await loadChatHistory();
+        await initVoiceRecording();
+        bindEvents();
+        // ========== 新增：初始化WebSocket ==========
+        initWebSocket();
+    };
+</script>
+</body>
+</html>
