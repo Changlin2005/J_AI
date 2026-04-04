@@ -18,4 +18,5 @@
 
 ### 客户端采用unity3d(进行中)
 
-<img width="1671" height="153" alt="image" src="https://github.com/user-attachments/assets/8ced83af-1d48-47cd-89db-9633da442f2c" />
+<img width="2189" height="1599" alt="image" src="https://github.com/user-attachments/assets/c3db3efa-b602-4c89-9487-4c62de3bd5c7" />
+
